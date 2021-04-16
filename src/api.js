@@ -73,6 +73,7 @@ Module["onRuntimeInitialized"] = function onRuntimeInitialized() {
     var SQLITE_UTF8 = 1;
     // var - cwrap function
     var sqlite3_open = cwrap("sqlite3_open", "number", ["string", "number"]);
+    var sqlite3_open_v2 = cwrap("sqlite3_open_v2", "number", ["string", "number", "number", "string"]);
     var sqlite3_close_v2 = cwrap("sqlite3_close_v2", "number", ["number"]);
     var sqlite3_exec = cwrap(
         "sqlite3_exec",
@@ -323,6 +324,7 @@ Module["onRuntimeInitialized"] = function onRuntimeInitialized() {
         }
         return true;
     };
+    Statement.prototype["bind_"] = Statement.prototype.bind; // work around https://github.com/GoogleChromeLabs/comlink/blob/4ba8162f6c28fb1bf53b491565ef9a3ae42b72d3/src/comlink.ts#L432
 
     /** Execute the statement, fetching the the next line of result,
     that can be retrieved with {@link Statement.get}.
@@ -790,8 +792,22 @@ Module["onRuntimeInitialized"] = function onRuntimeInitialized() {
         if (data != null) {
             FS.createDataFile("/", this.filename, data, true, true);
         }
-        this.handleError(sqlite3_open(this.filename, apiTemp));
+        const ret = sqlite3_open(this.filename, apiTemp);
         this.db = getValue(apiTemp, "i32");
+        this.handleError(ret);
+        registerExtensionFunctions(this.db);
+        // A list of all prepared statements of the database
+        this.statements = {};
+        // A list of all user function of the database
+        // (created by create_function call)
+        this.functions = {};
+    }
+
+    function CustomDatabase(filename) {
+        this.filename = filename;
+        const ret = sqlite3_open(this.filename, apiTemp);
+        this.db = getValue(apiTemp, "i32");
+        this.handleError(ret);
         registerExtensionFunctions(this.db);
         // A list of all prepared statements of the database
         this.statements = {};
@@ -1200,4 +1216,7 @@ Module["onRuntimeInitialized"] = function onRuntimeInitialized() {
 
     // export Database to Module
     Module.Database = Database;
+    Module["CustomDatabase"] = CustomDatabase;
+    Module["FS"] = FS;
+    CustomDatabase.prototype = Object.create(Database.prototype);
 };
